@@ -45,13 +45,14 @@ function Write-Property {
     #>
     param (
         [string]$Key,
-        [string]$Value
+        $Value
     )
     # Ensure value is not empty to keep output clean
     if ([string]::IsNullOrWhiteSpace($Value)) {
         $Value = "N/A"
     }
-    Write-Host ("{0,-25}: {1}" -f $Key, $Value)
+    # Explicitly convert to string to prevent COM object formatting errors
+    Write-Host ("{0,-25}: {1}" -f $Key, [string]$Value)
 }
 
 function Test-IsAdministrator {
@@ -720,11 +721,29 @@ if ($IsAdmin) {
     # ------------------------------------------------------
     Write-SubHeader "Windows Update"
     try {
-        $UpdateSession = New-Object -ComObject Microsoft.Update.Session
+        # Create COM Object
+        $UpdateSession = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop
+        
+        # Create Searcher
         $UpdateSearcher = $UpdateSession.CreateUpdateSearcher()
+        # Suppress any output from COM method calls
+        [void] $UpdateSearcher
+
+        # Perform Search
+        # Note: This can sometimes hang if the Windows Update Service is stuck.
         $Result = $UpdateSearcher.Search("IsInstalled=0 and Type='Software'")
         
-        Write-Property "Pending Updates" $Result.Updates.Count
+        $UpdateCount = 0
+        # Safely access Count property to prevent COM marshalling errors
+        if ($Result -and $Result.Updates) {
+            try {
+                $UpdateCount = $Result.Updates.Count
+            } catch {
+                $UpdateCount = "Error Counting"
+            }
+        }
+        
+        Write-Property "Pending Updates" $UpdateCount
         
         $RebootReq = if (Get-PendingRebootStatus) { "Yes" } else { "No" }
         Write-Property "Pending Reboot Required" $RebootReq
