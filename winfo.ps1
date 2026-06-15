@@ -515,9 +515,22 @@ try {
     $CritCount = if ($CritEvents) { $CritEvents.Count } else { 0 }
     Write-Property "Recent Critical Events" $CritCount
 
-    # Driver Issues
-    $DriverIssues = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-DriverFrameworks-UserMode'; Level=2; StartTime=$Date} -ErrorAction SilentlyContinue
-    Write-Property "Recent Driver Issues" "N/A (Requires deeper Event Log parsing)"
+    # Driver Issues - Basic Event Log Parsing
+    # Looking for Kernel-Power 41 (Unexpected Shutdown) or Kernel-PnP 219 (Driver Failed to Load) in last 24h
+    $DriverEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Id=41,219; StartTime=$Date} -ErrorAction SilentlyContinue
+    
+    if ($DriverEvents) {
+        Write-Host "Recent Driver Issues (Last 24h):" -ForegroundColor Red
+        foreach ($Event in $DriverEvents) {
+            # Extract first sentence of message for brevity
+            $Msg = $Event.Message.Split([Environment]::NewLine)[0]
+            if ($Msg.Length -gt 60) { $Msg = $Msg.Substring(0,60) + "..." }
+            Write-Host ("  - {0,25}: ID {1} - {2}" -f $Event.TimeCreated.ToString("HH:mm"), $Event.Id, $Msg)
+        }
+    } else {
+        Write-Property "Recent Driver Issues" "None detected"
+    }
+
 } catch {
     Write-Host "Error gathering Recent Changes: $_" -ForegroundColor Red
 }
@@ -584,10 +597,16 @@ try {
     $TopRAM = Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 1 -ExpandProperty ProcessName
     Write-Property "Top CPU/RAM Processes" "CPU: $TopCPU | RAM: $TopRAM"
 
-    # Startup Programs
+    # Startup Programs - List Names and Paths
     $Startups = Get-CimInstance Win32_StartupCommand
-    $StartupCount = if ($Startups) { $Startups.Count } else { 0 }
-    Write-Property "Startup Programs" "$StartupCount programs registered"
+    if ($Startups) {
+        Write-Host "Startup Programs ($($Startups.Count)):" -ForegroundColor Yellow
+        foreach ($s in $Startups) {
+             Write-Host ("  - {0,-25}: {1}" -f $s.Name, $s.Command)
+        }
+    } else {
+        Write-Property "Startup Programs" "None registered"
+    }
 
     # Teams Size
     $TeamsPath = "$env:APPDATA\Microsoft\Teams"
@@ -767,9 +786,33 @@ if ($IsAdmin) {
         $AdminList = if ($Admins) { $Admins -join ", " } else { "N/A" }
         Write-Property "Local Administrators" $AdminList
 
-        # Activation
-        $Activation = cscript //nologo $env:SystemRoot\System32\slmgr.vbs /dli
-        Write-Property "Windows Activation" "Check License Status"
+        # Activation Status & Error Detection
+        # Try WMI first for clean status, fallback to SLMGR for errors
+        $License = Get-CimInstance SoftwareLicensingProduct -Filter "Name like 'Windows%' AND PartialProductKey IS NOT NULL" -ErrorAction SilentlyContinue | Select-Object -First 1
+        
+        if ($License) {
+            $LicenseStatus = switch ($License.LicenseStatus) {
+                0 { "Unlicensed" }
+                1 { "Licensed" }
+                2 { "OOB Grace" }
+                3 { "OOT Grace" }
+                4 { "Non-Genuine Grace" }
+                5 { "Notification" }
+                6 { "Extended Grace" }
+                default { "Unknown" }
+            }
+
+            # If not licensed, attempt to find specific error via slmgr
+            if ($License.LicenseStatus -ne 1) {
+                $SLMgrOutput = cscript //nologo $env:SystemRoot\System32\slmgr.vbs /dli 2>&1
+                $ErrorDesc = ($SLMgrOutput | Select-String "Error:").ToString().Trim()
+                if ($ErrorDesc) { $LicenseStatus += " - $ErrorDesc" }
+            }
+            
+            Write-Property "Windows Activation" $LicenseStatus
+        } else {
+            Write-Property "Windows Activation" "Not available"
+        }
         
         # Hosts File
         $HostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
