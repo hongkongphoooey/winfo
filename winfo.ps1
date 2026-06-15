@@ -295,9 +295,6 @@ try {
     $InternetPing = Test-Connection -ComputerName "8.8.4.4" -Count 1 -Quiet
     $InternetStatus = if ($InternetPing) { "Yes" } else { "No" }
     Write-Property "Internet Reachable" $InternetStatus
-    
-    # Corporate Resource (Placeholder)
-    Write-Property "Corporate Resource" "Skipped (Define Target)"
 } catch {
     Write-Host "Error during connectivity tests: $_" -ForegroundColor Red
 }
@@ -573,7 +570,6 @@ Write-SubHeader "User Environment:"
 
 try {
     Write-Property "Time Zone" ((Get-TimeZone).DisplayName)
-    Write-Property "Time Last Synced" "N/A (Requires W32Time query)"
     
     $OneDrive = Get-Process OneDrive -ErrorAction SilentlyContinue
     $OneDriveStatus = if ($OneDrive) { "Running" } else { "Stopped" }
