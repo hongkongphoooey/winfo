@@ -741,11 +741,10 @@ if ($IsAdmin) {
             }
         }
         
-        # Cast to string explicitly to prevent XML serialization attempts in Write-Property
-        Write-Property "Pending Updates" [string]$UpdateCount
+        Write-Property "Pending Updates" $UpdateCount
         
         $RebootReq = if (Get-PendingRebootStatus) { "Yes" } else { "No" }
-        Write-Property "Pending Reboot Required" [string]$RebootReq
+        Write-Property "Pending Reboot Required" $RebootReq
     } catch {
         Write-Host "Error gathering Windows Update info: $_" -ForegroundColor Red
     }
