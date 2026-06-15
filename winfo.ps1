@@ -387,9 +387,9 @@ try {
 Write-SubHeader "Peripherals"
 
 try {
-    $Audio = Get-WmiObject Win32_SoundDevice
+    $Audio = @(Get-WmiObject Win32_SoundDevice)
     $AudioCount = if ($Audio) { $Audio.Count } else { 0 }
-    Write-Property "Audio Devices" "$AudioCount devices found"
+    Write-Property "Audio Devices" "$AudioCount device(s) found"
     
     $Webcam = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -like "*Camera*" -or $_.Name -like "*Webcam*" -or $_.Name -like "*Integrated*" }
     if ($Webcam) {
