@@ -211,7 +211,7 @@ try {
     }
 
     # VPN Adapters
-    $VPNAdapters = Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*VPN*" -or $_.Name -like "*VPN*" -or $_.Name -like *"Tunnel"* }
+    $VPNAdapters = Get-NetAdapter | Where-Object { $_.InterfaceDescription -like "*VPN*" -or $_.Name -like "*VPN*" -or $_.Name -like "*Tunnel*" }
     if ($VPNAdapters) {
         Write-Property "VPN Adapters" ($VPNAdapters.Name -join ", ")
     } else {
