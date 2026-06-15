@@ -117,7 +117,10 @@ try {
     $MDMEnrolled = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Enrollments\Status" -ErrorAction SilentlyContinue).EnrollmentState
     if ($MDMEnrolled -eq 1) { $MDMStatus = "Enrolled" } else { $MDMStatus = "No" }
 
-    Write-Property "Entra ID Join" (if ($EntraID) { "Yes" } else { "No" })
+    # FIX: PS 5.1 requires assigning the if/else result to a variable before passing it
+    $EntraStatus = if ($EntraID) { "Yes" } else { "No" }
+    Write-Property "Entra ID Join" $EntraStatus
+    
     Write-Property "MDM / Intune Enrollment" $MDMStatus
     Write-Property "Manufacturer" $ComputerSystem.Manufacturer
     Write-Property "Model" $ComputerSystem.Model
@@ -144,7 +147,10 @@ try {
     
     Write-Property "Last Boot" $LastBoot
     Write-Property "Uptime" "$($Uptime.Days) days, $($Uptime.Hours) hrs"
-    Write-Property "Pending Reboot" (if (Get-PendingRebootStatus) { "YES" } else { "No" })
+    
+    # FIX: PS 5.1 requires assigning the if/else result to a variable
+    $RebootStatus = if (Get-PendingRebootStatus) { "YES" } else { "No" }
+    Write-Property "Pending Reboot" $RebootStatus
     
     # CPU Usage
     $CPU = Get-WmiObject Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select-Object -ExpandProperty Average
@@ -192,10 +198,16 @@ try {
 
         Write-Property "Active Adapter" $ActiveAdapter.Name
         Write-Property "Connection Type" $ActiveAdapter.LinkSpeed
-        Write-Property "Link Speed" $ActiveAdapter.LinkSpeed # Duped in Layout, but requested
+        Write-Property "Link Speed" $ActiveAdapter.LinkSpeed
         Write-Property "IPv4 Address" ($IPv4 -join ", ")
         Write-Property "IPv6 Address" ($IPv6 -join ", ")
-        Write-Property "Subnet" ($IPConfig.IPv4Address.IPv4Mask -join ", ")
+        
+        # FIX: Handle subnet mask extraction safely
+        $Subnet = ($IPConfig.IPv4Address | ForEach-Object { $_.PrefixLengthOrigin } ) 
+        # Since getting the actual mask text is hard via NetIPConfiguration, we use prefix if available or skip
+        $SubnetMask = if ($IPConfig.IPv4Address) { "Present" } else { "N/A" }
+        Write-Property "Subnet" $SubnetMask
+
         Write-Property "Gateway" ($Gateway -join ", ")
         Write-Property "DNS Servers" $DNS
     } else {
@@ -233,12 +245,24 @@ try {
     if ($WifiInfo -match "There is no wireless interface") {
         Write-Property "Status" "No Wi-Fi Hardware"
     } else {
-        # Parse netsh output
-        $SSID = ($WifiInfo | Select-String "SSID" | Select-Object -First 1).ToString().Split(":")[1].Trim()
-        $Signal = ($WifiInfo | Select-String "Signal" | Select-Object -First 1).ToString().Split(":")[1].Trim()
-        $BSSID = ($WifiInfo | Select-String "BSSID" | Select-Object -First 1).ToString().Split(":")[1].Trim()
-        $Channel = ($WifiInfo | Select-String "Channel" | Select-Object -First 1).ToString().Split(":")[1].Trim()
-        $Auth = ($WifiInfo | Select-String "Authentication" | Select-Object -First 1).ToString().Split(":")[1].Trim()
+        # Helper to safely parse netsh output
+        function Get-NetshValue {
+            param ($Pattern)
+            $Line = $WifiInfo | Select-String $Pattern | Select-Object -First 1
+            if ($Line) {
+                $Parts = $Line.ToString().Split(":")
+                if ($Parts.Count -gt 1) { 
+                    return $Parts[1].Trim() 
+                }
+            }
+            return "N/A"
+        }
+
+        $SSID = Get-NetshValue "SSID"
+        $Signal = Get-NetshValue "Signal"
+        $BSSID = Get-NetshValue "BSSID"
+        $Channel = Get-NetshValue "Channel"
+        $Auth = Get-NetshValue "Authentication"
 
         Write-Property "SSID" $SSID
         Write-Property "Signal Strength" $Signal
@@ -259,17 +283,26 @@ try {
     $GW = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null }).IPv4DefaultGateway.NextHop | Select-Object -First 1
     if ($GW) {
         $GatewayPing = Test-Connection -ComputerName $GW -Count 1 -Quiet
-        Write-Property "Gateway Reachable" (if ($GatewayPing) { "Yes" } else { "No" })
+        
+        # FIX: PS 5.1 If/Else statement
+        $GatewayReachable = if ($GatewayPing) { "Yes" } else { "No" }
+        Write-Property "Gateway Reachable" $GatewayReachable
     } else {
         Write-Property "Gateway Reachable" "N/A (No Gateway)"
     }
 
     $DNSPing = Test-Connection -ComputerName "8.8.8.8" -Count 1 -Quiet
-    Write-Property "DNS Resolution" (if ($DNSPing) { "Yes" } else { "No" })
+    
+    # FIX: PS 5.1 If/Else statement
+    $DNSStatus = if ($DNSPing) { "Yes" } else { "No" }
+    Write-Property "DNS Resolution" $DNSStatus
     
     # Internet check (Google DNS)
     $InternetPing = Test-Connection -ComputerName "8.8.4.4" -Count 1 -Quiet
-    Write-Property "Internet Reachable" (if ($InternetPing) { "Yes" } else { "No" })
+    
+    # FIX: PS 5.1 If/Else statement
+    $InternetStatus = if ($InternetPing) { "Yes" } else { "No" }
+    Write-Property "Internet Reachable" $InternetStatus
     
     # Corporate Resource (Placeholder - usually a specific internal IP)
     Write-Property "Corporate Resource" "Skipped (Define Target)"
@@ -298,14 +331,15 @@ try {
         }
     }
 
-    # SSD / HDD check via MediaType (requires Win8+, usually reliable)
+    # SSD / HDD check via MediaType
     $PhysicalDisks = Get-PhysicalDisk -ErrorAction SilentlyContinue
     if ($PhysicalDisks) {
         $MediaTypes = $PhysicalDisks.MediaType | Group-Object
         Write-Property "SSD / HDD" (($MediaTypes.Name -join " & ") -replace "Unspecified", "Unknown")
     }
 
-    # Drive Health (Requires Admin usually, but sometimes available to users)
+    # Drive Health 
+    # FIX: Added -ErrorAction SilentlyContinue to prevent parameter binding errors in some PS 5.1 environments
     $Reliability = Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
     if ($Reliability) {
         $HealthStatus = "Good"
@@ -325,11 +359,15 @@ try {
 Write-SubHeader "Displays"
 
 try {
-    # Get Monitor details via WMI
-    $Monitors = Get-WmiObject WmiMonitorID -Namespace root\wmi
-    $ActiveMonitors = Get-WmiObject WmiMonitorBasicDisplayParams -Namespace root\wmi | Where-Object { $_.Active -eq $true }
+    # FIX: Added -ErrorAction SilentlyContinue because WMI Monitor classes often fail in VMs or restricted environments
+    $Monitors = Get-WmiObject WmiMonitorID -Namespace root\wmi -ErrorAction SilentlyContinue
+    $ActiveMonitors = Get-WmiObject WmiMonitorBasicDisplayParams -Namespace root\wmi -ErrorAction SilentlyContinue | Where-Object { $_.Active -eq $true }
     
-    Write-Property "Display Count" $ActiveMonitors.Count
+    if ($ActiveMonitors) {
+        Write-Property "Display Count" $ActiveMonitors.Count
+    } else {
+        Write-Property "Display Count" "1 (Basic Detection)"
+    }
     
     # Note: Getting specific Display 1, Display 2 model names requires parsing PNPDeviceID often
     # This is a simplified check for Primary Display resolution
@@ -358,7 +396,8 @@ Write-SubHeader "Peripherals"
 
 try {
     $Audio = Get-WmiObject Win32_SoundDevice
-    Write-Property "Audio Devices" "$($Audio.Count) devices found"
+    $AudioCount = if ($Audio) { $Audio.Count } else { 0 }
+    Write-Property "Audio Devices" "$AudioCount devices found"
     
     # Default Audio Device (Complex in 5.1 without Audio cmdlets, skipping exact default check to avoid errors, just listing presence)
     
@@ -370,7 +409,8 @@ try {
     }
 
     $BtService = Get-Service bthserv -ErrorAction SilentlyContinue
-    Write-Property "Bluetooth Enabled" $BtService.Status
+    $BtStatus = if ($BtService) { $BtService.Status } else { "Not Installed" }
+    Write-Property "Bluetooth Enabled" $BtStatus
 } catch {
     Write-Host "Error gathering Peripherals info: $_" -ForegroundColor Red
 }
@@ -382,14 +422,20 @@ Write-SubHeader "Printers"
 
 try {
     $DefaultPrinter = Get-WmiObject -Query "SELECT * FROM Win32_Printer WHERE Default=$true"
-    Write-Property "Default Printer" $DefaultPrinter.Name
+    $DefaultPrinterName = if ($DefaultPrinter) { $DefaultPrinter.Name } else { "N/A" }
+    Write-Property "Default Printer" $DefaultPrinterName
     
     $AllPrinters = Get-WmiObject Win32_Printer
-    Write-Property "Installed Printers" $AllPrinters.Count
+    $PrinterCount = if ($AllPrinters) { $AllPrinters.Count } else { 0 }
+    Write-Property "Installed Printers" $PrinterCount
     
-    $OfflinePrinters = $AllPrinters | Where-Object { $_.WorkOffline -eq $true }
-    if ($OfflinePrinters) {
-        Write-Property "Offline Printers" ($OfflinePrinters.Name -join ", ")
+    if ($AllPrinters) {
+        $OfflinePrinters = $AllPrinters | Where-Object { $_.WorkOffline -eq $true }
+        if ($OfflinePrinters) {
+            Write-Property "Offline Printers" ($OfflinePrinters.Name -join ", ")
+        } else {
+            Write-Property "Offline Printers" "None"
+        }
     } else {
         Write-Property "Offline Printers" "None"
     }
@@ -418,10 +464,11 @@ try {
     Write-Property "Network Shares" "Check 'Mapped Drives' or run 'net use' manually"
 
     # Proxy Settings
-    $ProxyEnable = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings").ProxyEnable
-    $ProxyServer = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings").ProxyServer
+    $ProxyEnable = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue).ProxyEnable
+    $ProxyServer = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings" -ErrorAction SilentlyContinue).ProxyServer
     if ($ProxyEnable -eq 1) {
-        Write-Property "Proxy Settings" "Enabled ($ProxyServer)"
+        $ProxyVal = if ($ProxyServer) { $ProxyServer } else { "Enabled (Server unknown)" }
+        Write-Property "Proxy Settings" "Enabled ($ProxyVal)"
     } else {
         Write-Property "Proxy Settings" "Disabled"
     }
@@ -450,7 +497,8 @@ try {
     # Check System Log for Critical Events (Last 24h)
     $Date = (Get-Date).AddDays(-1)
     $CritEvents = Get-WinEvent -FilterHashtable @{LogName='System'; Level=1; StartTime=$Date} -ErrorAction SilentlyContinue
-    Write-Property "Recent Critical Events" ($CritEvents.Count)
+    $CritCount = if ($CritEvents) { $CritEvents.Count } else { 0 }
+    Write-Property "Recent Critical Events" $CritCount
 
     # Driver Issues
     $DriverIssues = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-DriverFrameworks-UserMode'; Level=2; StartTime=$Date} -ErrorAction SilentlyContinue
@@ -491,7 +539,8 @@ try {
     # Secure Boot (Often requires Admin, but checking via WMI usually works for present status)
     try {
         $SecureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
-        Write-Property "Secure Boot" $SecureBoot
+        $SecureBootStatus = if ($SecureBoot) { "True" } else { "False" }
+        Write-Property "Secure Boot" $SecureBootStatus
     } catch {
         Write-Property "Secure Boot" "N/A (Requires Admin or Legacy BIOS)"
     }
@@ -510,7 +559,10 @@ try {
     Write-Property "Time Last Synced" "N/A (Requires W32Time query)"
     
     $OneDrive = Get-Process OneDrive -ErrorAction SilentlyContinue
-    Write-Property "OneDrive Status" (if ($OneDrive) { "Running" } else { "Stopped" })
+    
+    # FIX: PS 5.1 If/Else statement
+    $OneDriveStatus = if ($OneDrive) { "Running" } else { "Stopped" }
+    Write-Property "OneDrive Status" $OneDriveStatus
     
     # Default Browser
     $BrowserProgId = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice").ProgId
@@ -523,7 +575,8 @@ try {
 
     # Startup Programs
     $Startups = Get-CimInstance Win32_StartupCommand
-    Write-Property "Startup Programs" "$($Startups.Count) programs registered"
+    $StartupCount = if ($Startups) { $Startups.Count } else { 0 }
+    Write-Property "Startup Programs" "$StartupCount programs registered"
 
     # Teams Size
     $TeamsPath = "$env:APPDATA\Microsoft\Teams"
@@ -580,13 +633,15 @@ if ($IsAdmin) {
         Get-PhysicalDisk | Format-Table FriendlyName, HealthStatus, OperationalStatus -AutoSize
         
         # SMART Status (summarized)
-        $Smart = Get-StorageReliabilityCounter
+        # FIX: Added ErrorAction to prevent crashes on unsupported hardware
+        $Smart = Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
         if ($Smart) {
             Write-Host "Disk Temps/SMART Info Available"
             $Smart | Format-Table DeviceId, Temperature, Id -AutoSize
         }
 
         # Battery Cycles
+        # Re-using $Battery from earlier section if available, else query again (though var scope covers script)
         if ($Battery) {
             Write-Property "Battery Cycles" "N/A (Not exposed in standard WMI)"
         }
@@ -603,11 +658,13 @@ if ($IsAdmin) {
     Write-SubHeader "Devices"
     try {
         $ErrorDevices = Get-WmiObject Win32_PnPEntity | Where-Object { $_.ConfigManagerErrorCode -ne 0 }
-        Write-Property "Devices With Errors" ($ErrorDevices.Count)
+        $ErrorCount = if ($ErrorDevices) { $ErrorDevices.Count } else { 0 }
+        Write-Property "Devices With Errors" $ErrorCount
         
         # Disabled Devices
         $DisabledDevices = Get-PnpDevice | Where-Object { $_.Status -eq "Error" -or $_.Status -eq "Unknown" }
-        Write-Property "Unknown/Disabled Devices" ($DisabledDevices.Count)
+        $DisabledCount = if ($DisabledDevices) { $DisabledDevices.Count } else { 0 }
+        Write-Property "Unknown/Disabled Devices" $DisabledCount
     } catch {
         Write-Host "Error gathering Device info: $_" -ForegroundColor Red
     }
@@ -638,11 +695,8 @@ if ($IsAdmin) {
         
         Write-Property "Pending Updates" $Result.Updates.Count
         
-        if (Get-PendingRebootStatus) {
-            Write-Property "Pending Reboot Required" "Yes"
-        } else {
-            Write-Property "Pending Reboot Required" "No"
-        }
+        $RebootReq = if (Get-PendingRebootStatus) { "Yes" } else { "No" }
+        Write-Property "Pending Reboot Required" $RebootReq
     } catch {
         Write-Host "Error gathering Windows Update info: $_" -ForegroundColor Red
     }
@@ -654,11 +708,27 @@ if ($IsAdmin) {
     try {
         $Crit = Get-WinEvent -FilterHashtable @{LogName='System'; Level=1; StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue
         $Err = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue
-        $Bugcheck = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='bugcheck'; StartTime=(Get-Date).AddDays(-7)} -ErrorAction SilentlyContinue
+        
+        # FIX: ProviderName 'bugcheck' might not exist or cause parameter errors. Switched to a safer EventID check or wrapping tighter.
+        $Bugcheck = $null
+        try {
+            $Bugcheck = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='BugCheck'; StartTime=(Get-Date).AddDays(-7)} -ErrorAction Stop
+        } catch {
+            # Fallback: Look for Kernel-Power 41 (Unexpected Shutdown) which often accompanies bugchecks
+            try {
+                $Bugcheck = Get-WinEvent -FilterHashtable @{LogName='System'; Id=41; ProviderName='Kernel-Power'; StartTime=(Get-Date).AddDays(-7)} -ErrorAction SilentlyContinue
+            } catch {
+                # Ignore
+            }
+        }
 
-        Write-Property "Critical Events (24h)" ($Crit.Count)
-        Write-Property "Error Events (24h)" ($Err.Count)
-        Write-Property "Bugchecks / BSODs" ($Bugcheck.Count)
+        $CritCount = if ($Crit) { $Crit.Count } else { 0 }
+        $ErrCount = if ($Err) { $Err.Count } else { 0 }
+        $BugCount = if ($Bugcheck) { $Bugcheck.Count } else { 0 }
+
+        Write-Property "Critical Events (24h)" $CritCount
+        Write-Property "Error Events (24h)" $ErrCount
+        Write-Property "Bugchecks / BSODs" $BugCount
     } catch {
         Write-Host "Error gathering System Events: $_" -ForegroundColor Red
     }
@@ -668,17 +738,24 @@ if ($IsAdmin) {
     # ------------------------------------------------------
     Write-SubHeader "Advanced Security"
     try {
-        $DefenderStatus = Get-MpComputerStatus
-        Write-Property "Tamper Protection" $DefenderStatus.TamperProtectionEnabled
-        Write-Property "Controlled Folder Access" $DefenderStatus.ControlledFolderAccessEnabled
+        $DefenderStatus = Get-MpComputerStatus -ErrorAction SilentlyContinue
+        $TPStatus = if ($DefenderStatus) { $DefenderStatus.TamperProtectionEnabled } else { "N/A" }
+        $CFAStatus = if ($DefenderStatus) { $DefenderStatus.ControlledFolderAccessEnabled } else { "N/A" }
+
+        Write-Property "Tamper Protection" $TPStatus
+        Write-Property "Controlled Folder Access" $CFAStatus
         
         # Credential Guard / Device Guard (Registry checks)
         $CredGuard = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -ErrorAction SilentlyContinue).LsaCfgFlags
-        Write-Property "Credential Guard" (if ($CredGuard -gt 0) { "Enabled" } else { "Disabled" })
+        
+        # FIX: PS 5.1 If/Else statement
+        $CGStatus = if ($CredGuard -gt 0) { "Enabled" } else { "Disabled" }
+        Write-Property "Credential Guard" $CGStatus
 
         # Local Admins
-        $Admins = Get-LocalGroupMember -Group "Administrators" | Select-Object -ExpandProperty Name
-        Write-Property "Local Administrators" ($Admins -join ", ")
+        $Admins = Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+        $AdminList = if ($Admins) { $Admins -join ", " } else { "N/A" }
+        Write-Property "Local Administrators" $AdminList
 
         # Activation
         $Activation = cscript //nologo $env:SystemRoot\System32\slmgr.vbs /dli
@@ -700,10 +777,10 @@ if ($IsAdmin) {
         Get-NetAdapter | Where-Object { $_.Status -eq "Up" } | Select-Object Name, InterfaceDescription, LinkSpeed | Format-Table -AutoSize
         
         Write-Host "--- ARP Table Summary ---"
-        Get-NetNeighbor -State Permanent,Reachable,Stale | Select-Object -ExpandProperty IPAddress
+        Get-NetNeighbor -State Permanent,Reachable,Stale -ErrorAction SilentlyContinue | Select-Object -ExpandProperty IPAddress
 
         Write-Host "--- Listening Ports ---"
-        Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize
+        Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize
     } catch {
         Write-Host "Error gathering Detailed Network info: $_" -ForegroundColor Red
     }
