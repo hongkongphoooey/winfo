@@ -721,32 +721,31 @@ if ($IsAdmin) {
     # ------------------------------------------------------
     Write-SubHeader "Windows Update"
     try {
-        # Create COM Object
-        $UpdateSession = New-Object -ComObject Microsoft.Update.Session -ErrorAction Stop
+        # Create COM Object with strict type checking to prevent marshalling errors
+        $UpdateSession = New-Object -ComObject Microsoft.Update.Session -Strict -ErrorAction Stop
         
         # Create Searcher
         $UpdateSearcher = $UpdateSession.CreateUpdateSearcher()
-        # Suppress any output from COM method calls
-        [void] $UpdateSearcher
+        # Explicitly suppress output to prevent pipeline pollution
+        $null = $UpdateSearcher
 
-        # Perform Search
-        # Note: This can sometimes hang if the Windows Update Service is stuck.
-        $Result = $UpdateSearcher.Search("IsInstalled=0 and Type='Software'")
+        $SearchResult = $UpdateSearcher.Search("IsInstalled=0 and Type='Software'")
         
         $UpdateCount = 0
-        # Safely access Count property to prevent COM marshalling errors
         if ($Result -and $Result.Updates) {
             try {
-                $UpdateCount = $Result.Updates.Count
+                # Explicitly cast to integer to ensure we are not passing a COM object wrapper
+                $UpdateCount = [int]$SearchResult.Updates.Count
             } catch {
                 $UpdateCount = "Error Counting"
             }
         }
         
-        Write-Property "Pending Updates" $UpdateCount
+        # Cast to string explicitly to prevent XML serialization attempts in Write-Property
+        Write-Property "Pending Updates" [string]$UpdateCount
         
         $RebootReq = if (Get-PendingRebootStatus) { "Yes" } else { "No" }
-        Write-Property "Pending Reboot Required" $RebootReq
+        Write-Property "Pending Reboot Required" [string]$RebootReq
     } catch {
         Write-Host "Error gathering Windows Update info: $_" -ForegroundColor Red
     }
