@@ -1,0 +1,231 @@
+
+====================================================
+SYSTEM SUMMARY
+====================================================
+
+## Identity
+--------
+Hostname                 : WIN11
+Current User             : WIN11\User
+Domain                   : WORKGROUP
+Entra ID Join            : No
+MDM / Intune Enrollment  : No
+Manufacturer             : innotek GmbH
+Model                    : VirtualBox
+Serial Number            : VirtualBox-6afa402c-cd19-4ee7-bd9f-3747301e04c1
+BIOS Version             : VirtualBox
+BIOS Date                : 11/30/2006 16:00:00
+OS Edition               : Microsoft Windows 11 IoT Enterprise LTSC
+OS Version               : 10.0.26100
+OS Build                 : 26100
+OS Install Date          : 06/15/2026 15:22:14
+
+## Health
+------
+Last Boot                : 06/15/2026 15:21:09
+Uptime                   : 0 days, 1 hrs
+Pending Reboot           : YES
+CPU Usage                : 3 %
+Memory Usage             : 30.6 % (4.9GB / 15.98 GB)
+Battery Health           : 1 - 27%
+
+## Network
+-------
+Active Adapter           : Ethernet
+Connection Type          : 1 Gbps
+Link Speed               : 1 Gbps
+IPv4 Address             : 10.0.2.15
+IPv6 Address             : fd17:625c:f037:2:c637:bcea:92ae:398b
+Subnet                   : Present
+Gateway                  : 10.0.2.2
+DNS Servers              : fd17:625c:f037:2::3, 0.127.0.0
+Public IP                : 174.87.121.178
+VPN Adapters             : None Detected
+
+## Wi-Fi
+-----
+SSID                     : N/A
+Signal Strength          : N/A
+BSSID                    : N/A
+Channel                  : N/A
+Authentication           : N/A
+
+## Connectivity Tests
+------------------
+Gateway Reachable        : Yes
+DNS Resolution           : Yes
+Internet Reachable       : Yes
+
+## Storage
+-------
+Drive Summary            : 1 Local Drive(s) detected
+C:                       : 37.38 GB free of 58.85 GB
+SSD / HDD                : Unknown
+Drive Health             : Good
+
+## Displays
+--------
+Display Count            : 1 (Basic Detection)
+Primary Display          : Active (WMI generic)
+Dock Detected            : No
+
+## Peripherals
+-----------
+Audio Devices            : 1 device(s) found
+Webcam Present           : Yes
+Bluetooth Enabled        : Stopped
+
+## Printers
+--------
+Default Printer          : N/A
+Installed Printers       : 0
+Offline Printers         : None
+
+## User Environment
+----------------
+Profile Path             : C:\Users\User
+Mapped Drives            : None
+Network Shares           : Check 'Mapped Drives' or run 'net use' manually
+Proxy Settings           : Disabled
+WinHTTP Proxy            : Direct Access (No Proxy)
+RDP Sessions             : Active sessions detected (Run 'query session' for details)
+
+## Recent Changes
+--------------
+Last Successful Update   : KB5094135 installed on 06/15/2026 00:00:00
+Recent Critical Events   : 0
+Recent Driver Issues     : None detected
+
+## Security
+--------
+Windows Defender         : RealTimeProtection: True
+Defender Signatures      : 1.453.113.0 / 1.453.113.0
+Firewall Profiles        : Domain, Private, Public
+TPM Present              : Yes (Version 2.0, 0, 1.83)
+Secure Boot              : True
+
+## User Environment:
+-----------------
+Time Zone                : (UTC-08:00) Pacific Time (US & Canada)
+OneDrive Status          : Stopped
+Default Browser          : FirefoxURL-308046B0AF4A39CB
+Top CPU/RAM Processes    : CPU: svchost | RAM: firefox
+Startup Programs (2):
+  - SecurityHealth           : %windir%\system32\SecurityHealthSystray.exe
+  - VBoxTray                 : %SystemRoot%\system32\VBoxTray.exe
+Size of Teams Cache      : Teams not installed/used
+Is Virtual Machine       : Yes (VirtualBox)
+
+====================================================
+ADMIN DIAGNOSTICS
+====================================================
+
+## BitLocker
+---------
+OS Drive (C:)            : Protection On
+Encryption Method        : AES 256 (Default)
+Key Protectors           : Check 'manage-bde -protectors -get C:'
+
+## Hardware Health
+---------------
+
+FriendlyName  HealthStatus OperationalStatus
+------------  ------------ -----------------
+VBOX HARDDISK Healthy      OK               
+
+
+Disk Temps/SMART Info Available
+
+DeviceId Temperature Id
+-------- ----------- --
+0                  0   
+
+
+Battery Cycles           : N/A (Not exposed in standard WMI)
+Chassis Type             : Virtual Machine
+
+## Devices
+-------
+Devices With Errors      : 0
+Unknown/Disabled Devices : N/A
+
+## Services
+--------
+Automatic Services Not Running: edgeupdate, gpsvc, MapsBroker, VBoxService
+
+## Windows Update
+--------------
+Pending Updates          : 0
+Pending Reboot Required  : Yes
+
+## System Events
+-------------
+Critical Events (24h)    : 0
+Error Events (24h)       : 2
+Bugchecks / BSODs        : 0
+
+## Advanced Security
+-----------------
+Tamper Protection        : N/A
+Controlled Folder Access : N/A
+Credential Guard         : Disabled
+Local Administrators     : WIN11\Administrator, WIN11\User
+Windows Activation       : Notification
+Hosts File Modified      : 04/01/2024 00:24:05
+
+## Detailed Network
+----------------
+
+Name     InterfaceDescription                 LinkSpeed
+----     --------------------                 ---------
+Ethernet Intel(R) PRO/1000 MT Desktop Adapter 1 Gbps   
+
+
+--- ARP Table Summary ---
+ff02::1:fff0:3df2
+ff02::1:ffb4:77ec
+ff02::1:ffae:398b
+ff02::1:ff00:3
+ff02::1:ff00:2
+ff02::1:3
+ff02::1:2
+ff02::fb
+ff02::16
+ff02::2
+ff02::1
+fe80::2
+fd17:625c:f037:2::3
+ff02::1:2
+ff02::16
+255.255.255.255
+239.255.255.250
+224.0.0.252
+224.0.0.251
+224.0.0.22
+10.0.2.255
+10.0.2.2
+239.255.255.250
+224.0.0.22
+--- Listening Ports ---
+
+LocalAddress LocalPort OwningProcess
+------------ --------- -------------
+::               49669          1080
+::               49668          3752
+::               49667          2860
+::               49666          2380
+::               49665          1008
+::               49664          1088
+::                 445             4
+::                 135          1360
+0.0.0.0          49669          1080
+0.0.0.0          49668          3752
+0.0.0.0          49667          2860
+0.0.0.0          49666          2380
+0.0.0.0          49665          1008
+0.0.0.0          49664          1088
+0.0.0.0           5040          6996
+10.0.2.15          139             4
+0.0.0.0            135          1360
+
+
