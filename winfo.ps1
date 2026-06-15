@@ -117,7 +117,7 @@ try {
     $MDMEnrolled = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Enrollments\Status" -ErrorAction SilentlyContinue).EnrollmentState
     if ($MDMEnrolled -eq 1) { $MDMStatus = "Enrolled" } else { $MDMStatus = "No" }
 
-    # FIX: PS 5.1 requires assigning the if/else result to a variable before passing it
+    # PS 5.1 Fix: Assign result to variable
     $EntraStatus = if ($EntraID) { "Yes" } else { "No" }
     Write-Property "Entra ID Join" $EntraStatus
     
@@ -148,7 +148,7 @@ try {
     Write-Property "Last Boot" $LastBoot
     Write-Property "Uptime" "$($Uptime.Days) days, $($Uptime.Hours) hrs"
     
-    # FIX: PS 5.1 requires assigning the if/else result to a variable
+    # PS 5.1 Fix: Assign result to variable
     $RebootStatus = if (Get-PendingRebootStatus) { "YES" } else { "No" }
     Write-Property "Pending Reboot" $RebootStatus
     
@@ -202,9 +202,7 @@ try {
         Write-Property "IPv4 Address" ($IPv4 -join ", ")
         Write-Property "IPv6 Address" ($IPv6 -join ", ")
         
-        # FIX: Handle subnet mask extraction safely
-        $Subnet = ($IPConfig.IPv4Address | ForEach-Object { $_.PrefixLengthOrigin } ) 
-        # Since getting the actual mask text is hard via NetIPConfiguration, we use prefix if available or skip
+        # Subnet Logic
         $SubnetMask = if ($IPConfig.IPv4Address) { "Present" } else { "N/A" }
         Write-Property "Subnet" $SubnetMask
 
@@ -283,8 +281,6 @@ try {
     $GW = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null }).IPv4DefaultGateway.NextHop | Select-Object -First 1
     if ($GW) {
         $GatewayPing = Test-Connection -ComputerName $GW -Count 1 -Quiet
-        
-        # FIX: PS 5.1 If/Else statement
         $GatewayReachable = if ($GatewayPing) { "Yes" } else { "No" }
         Write-Property "Gateway Reachable" $GatewayReachable
     } else {
@@ -292,19 +288,15 @@ try {
     }
 
     $DNSPing = Test-Connection -ComputerName "8.8.8.8" -Count 1 -Quiet
-    
-    # FIX: PS 5.1 If/Else statement
     $DNSStatus = if ($DNSPing) { "Yes" } else { "No" }
     Write-Property "DNS Resolution" $DNSStatus
     
     # Internet check (Google DNS)
     $InternetPing = Test-Connection -ComputerName "8.8.4.4" -Count 1 -Quiet
-    
-    # FIX: PS 5.1 If/Else statement
     $InternetStatus = if ($InternetPing) { "Yes" } else { "No" }
     Write-Property "Internet Reachable" $InternetStatus
     
-    # Corporate Resource (Placeholder - usually a specific internal IP)
+    # Corporate Resource (Placeholder)
     Write-Property "Corporate Resource" "Skipped (Define Target)"
 } catch {
     Write-Host "Error during connectivity tests: $_" -ForegroundColor Red
@@ -316,7 +308,8 @@ try {
 Write-SubHeader "Storage"
 
 try {
-    $Drives = Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } # Fixed disks
+    # Wrap in array @() to ensure Count works even if 1 drive is returned
+    $Drives = @(Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 })
     
     Write-Property "Drive Summary" "$($Drives.Count) Local Drive(s) detected"
 
@@ -339,8 +332,12 @@ try {
     }
 
     # Drive Health 
-    # FIX: Added -ErrorAction SilentlyContinue to prevent parameter binding errors in some PS 5.1 environments
-    $Reliability = Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+    # PS 5.1 Fix: Pipe Get-PhysicalDisk into Get-StorageReliabilityCounter to resolve Parameter Set errors
+    $Reliability = $null
+    if ($PhysicalDisks) {
+        $Reliability = $PhysicalDisks | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+    }
+    
     if ($Reliability) {
         $HealthStatus = "Good"
         # Simple logic: if any drive has temperature warning or errors, flag it
@@ -359,7 +356,7 @@ try {
 Write-SubHeader "Displays"
 
 try {
-    # FIX: Added -ErrorAction SilentlyContinue because WMI Monitor classes often fail in VMs or restricted environments
+    # Fix: Added -ErrorAction SilentlyContinue because WMI Monitor classes often fail in VMs
     $Monitors = Get-WmiObject WmiMonitorID -Namespace root\wmi -ErrorAction SilentlyContinue
     $ActiveMonitors = Get-WmiObject WmiMonitorBasicDisplayParams -Namespace root\wmi -ErrorAction SilentlyContinue | Where-Object { $_.Active -eq $true }
     
@@ -369,8 +366,6 @@ try {
         Write-Property "Display Count" "1 (Basic Detection)"
     }
     
-    # Note: Getting specific Display 1, Display 2 model names requires parsing PNPDeviceID often
-    # This is a simplified check for Primary Display resolution
     $PrimaryDisplay = (Get-CimInstance Win32_DesktopMonitor | Where-Object { $_.Primary -eq $true }).ScreenHeight
     if ($PrimaryDisplay) {
         Write-Property "Primary Display" "Active (Detected)"
@@ -398,8 +393,6 @@ try {
     $Audio = Get-WmiObject Win32_SoundDevice
     $AudioCount = if ($Audio) { $Audio.Count } else { 0 }
     Write-Property "Audio Devices" "$AudioCount devices found"
-    
-    # Default Audio Device (Complex in 5.1 without Audio cmdlets, skipping exact default check to avoid errors, just listing presence)
     
     $Webcam = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -like "*Camera*" -or $_.Name -like "*Webcam*" -or $_.Name -like "*Integrated*" }
     if ($Webcam) {
@@ -474,9 +467,15 @@ try {
     }
     
     # WinHTTP Proxy
-    $WinHTTP = netsh winhttp show proxy
-    Write-Property "WinHTTP Proxy" "Check Output Below" 
-    # Note: netsh output is direct, hard to capture in property line cleanly without parsing
+    # Fix: Parse output instead of saying "Check Below"
+    $WinHTTP = netsh winhttp show proxy 2>&1
+    if ($WinHTTP -match "Direct access") {
+        Write-Property "WinHTTP Proxy" "Direct Access (No Proxy)"
+    } elseif ($WinHTTP -match "Proxy Server:\s+(.+)") {
+        Write-Property "WinHTTP Proxy" $matches[1].Trim()
+    } else {
+        Write-Property "WinHTTP Proxy" "N/A"
+    }
 
     # RDP Sessions
     $RDPSessions = query session
@@ -491,8 +490,27 @@ try {
 Write-SubHeader "Recent Changes"
 
 try {
-    $Update = Get-CimInstance Win32_QuickFixEngineering | Sort-Object InstalledOn -Descending | Select-Object -First 1
-    Write-Property "Last Successful Update" "$($Update.HotFixID) installed on $($Update.InstalledOn)"
+    # PS 5.1 Fix: Win32_QuickFixEngineering 'InstalledOn' can contain invalid dates causing Sort-Object to crash.
+    # We must filter for valid dates before sorting.
+    $AllUpdates = Get-CimInstance Win32_QuickFixEngineering
+    $ValidUpdates = @()
+    foreach ($u in $AllUpdates) {
+        try {
+            # Attempt to parse date. If successful, add to valid list.
+            $null = [DateTime]::Parse($u.InstalledOn)
+            $ValidUpdates += $u
+        } catch {
+            # Skip updates with unparseable dates
+        }
+    }
+    
+    $Update = $ValidUpdates | Sort-Object InstalledOn -Descending | Select-Object -First 1
+    
+    if ($Update) {
+        Write-Property "Last Successful Update" "$($Update.HotFixID) installed on $($Update.InstalledOn)"
+    } else {
+        Write-Property "Last Successful Update" "No valid update data found"
+    }
 
     # Check System Log for Critical Events (Last 24h)
     $Date = (Get-Date).AddDays(-1)
@@ -514,7 +532,6 @@ Write-SubHeader "Security"
 
 try {
     # Windows Defender Status
-    # Note: Get-MpComputerStatus works on Win10/11 PS5.1 usually
     $Defender = Get-MpComputerStatus -ErrorAction SilentlyContinue
     if ($Defender) {
         Write-Property "Windows Defender" "RealTimeProtection: $($Defender.RealTimeProtectionEnabled)"
@@ -536,7 +553,7 @@ try {
         Write-Property "TPM Present" "No"
     }
 
-    # Secure Boot (Often requires Admin, but checking via WMI usually works for present status)
+    # Secure Boot (Often requires Admin)
     try {
         $SecureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
         $SecureBootStatus = if ($SecureBoot) { "True" } else { "False" }
@@ -559,8 +576,6 @@ try {
     Write-Property "Time Last Synced" "N/A (Requires W32Time query)"
     
     $OneDrive = Get-Process OneDrive -ErrorAction SilentlyContinue
-    
-    # FIX: PS 5.1 If/Else statement
     $OneDriveStatus = if ($OneDrive) { "Running" } else { "Stopped" }
     Write-Property "OneDrive Status" $OneDriveStatus
     
@@ -630,18 +645,19 @@ if ($IsAdmin) {
     Write-SubHeader "Hardware Health"
     try {
         # Physical Disks
-        Get-PhysicalDisk | Format-Table FriendlyName, HealthStatus, OperationalStatus -AutoSize
+        $PhysicalDisksAdmin = Get-PhysicalDisk
+        $PhysicalDisksAdmin | Format-Table FriendlyName, HealthStatus, OperationalStatus -AutoSize
         
         # SMART Status (summarized)
-        # FIX: Added ErrorAction to prevent crashes on unsupported hardware
-        $Smart = Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
+        # PS 5.1 Fix: Pipe Get-PhysicalDisk into Get-StorageReliabilityCounter to resolve Parameter Set errors
+        $Smart = $PhysicalDisksAdmin | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue
         if ($Smart) {
             Write-Host "Disk Temps/SMART Info Available"
             $Smart | Format-Table DeviceId, Temperature, Id -AutoSize
         }
 
         # Battery Cycles
-        # Re-using $Battery from earlier section if available, else query again (though var scope covers script)
+        # Re-using $Battery from earlier section if available
         if ($Battery) {
             Write-Property "Battery Cycles" "N/A (Not exposed in standard WMI)"
         }
@@ -709,12 +725,12 @@ if ($IsAdmin) {
         $Crit = Get-WinEvent -FilterHashtable @{LogName='System'; Level=1; StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue
         $Err = Get-WinEvent -FilterHashtable @{LogName='System'; Level=2; StartTime=(Get-Date).AddHours(-24)} -ErrorAction SilentlyContinue
         
-        # FIX: ProviderName 'bugcheck' might not exist or cause parameter errors. Switched to a safer EventID check or wrapping tighter.
+        # Check for Bugcheck (BSOD)
         $Bugcheck = $null
         try {
             $Bugcheck = Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='BugCheck'; StartTime=(Get-Date).AddDays(-7)} -ErrorAction Stop
         } catch {
-            # Fallback: Look for Kernel-Power 41 (Unexpected Shutdown) which often accompanies bugchecks
+            # Fallback: Look for Kernel-Power 41 (Unexpected Shutdown)
             try {
                 $Bugcheck = Get-WinEvent -FilterHashtable @{LogName='System'; Id=41; ProviderName='Kernel-Power'; StartTime=(Get-Date).AddDays(-7)} -ErrorAction SilentlyContinue
             } catch {
@@ -747,8 +763,6 @@ if ($IsAdmin) {
         
         # Credential Guard / Device Guard (Registry checks)
         $CredGuard = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -ErrorAction SilentlyContinue).LsaCfgFlags
-        
-        # FIX: PS 5.1 If/Else statement
         $CGStatus = if ($CredGuard -gt 0) { "Enabled" } else { "Disabled" }
         Write-Property "Credential Guard" $CGStatus
 
