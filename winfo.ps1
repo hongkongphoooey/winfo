@@ -726,8 +726,6 @@ if ($IsAdmin) {
         
         # Create Searcher
         $UpdateSearcher = $UpdateSession.CreateUpdateSearcher()
-        # Explicitly suppress output to prevent pipeline pollution
-        $null = $UpdateSearcher
 
         $SearchResult = $UpdateSearcher.Search("IsInstalled=0 and Type='Software'")
         
