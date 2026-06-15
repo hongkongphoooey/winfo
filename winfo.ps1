@@ -777,7 +777,13 @@ if ($IsAdmin) {
         Write-Property "Controlled Folder Access" $CFAStatus
         
         # Credential Guard / Device Guard (Registry checks)
-        $CredGuard = (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -ErrorAction SilentlyContinue).LsaCfgFlags
+        # Fix: Check for null before accessing property
+        $LsaProps = Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Lsa" -ErrorAction SilentlyContinue
+        if ($LsaProps) {
+            $CredGuard = $LsaProps.LsaCfgFlags
+        } else {
+            $CredGuard = 0
+        }
         $CGStatus = if ($CredGuard -gt 0) { "Enabled" } else { "Disabled" }
         Write-Property "Credential Guard" $CGStatus
 
@@ -805,7 +811,10 @@ if ($IsAdmin) {
             # If not licensed, attempt to find specific error via slmgr
             if ($License.LicenseStatus -ne 1) {
                 $SLMgrOutput = cscript //nologo $env:SystemRoot\System32\slmgr.vbs /dli 2>&1
-                $ErrorDesc = ($SLMgrOutput | Select-String "Error:").ToString().Trim()
+                # Fix: Ensure Select-String result is not null before calling .ToString()
+                $ErrorMatch = $SLMgrOutput | Select-String "Error:"
+                $ErrorDesc = if ($ErrorMatch) { $ErrorMatch.ToString().Trim() } else { "" }
+                
                 if ($ErrorDesc) { $LicenseStatus += " - $ErrorDesc" }
             }
             
@@ -815,8 +824,14 @@ if ($IsAdmin) {
         }
         
         # Hosts File
+        # Fix: Ensure Get-Item result is not null before accessing property
         $HostsPath = "$env:SystemRoot\System32\drivers\etc\hosts"
-        $HostsMod = (Get-Item $HostsPath).LastWriteTime
+        $HostsItem = Get-Item $HostsPath -ErrorAction SilentlyContinue
+        if ($HostsItem) {
+            $HostsMod = $HostsItem.LastWriteTime
+        } else {
+            $HostsMod = "File not found"
+        }
         Write-Property "Hosts File Modified" $HostsMod
     } catch {
         Write-Host "Error gathering Advanced Security info: $_" -ForegroundColor Red
