@@ -18,9 +18,13 @@ The program can be run in one of two ways: locally or over the internet.
 
 ### Local usage
 Download [winfo.ps1](https://raw.githubusercontent.com/hongkongphoooey/winfo/refs/heads/master/winfo.ps1) and run in an interactive PowerShell window - preferably run as Administrator.
+You may need to run `Set-ExecutionPolicy Bypass` first.
 
 ### From the web
-Open PowerShell with desired privilege level and run `irm https://spoo.me/winfo | iex` or `irm https://raw.githubusercontent.com/hongkongphoooey/winfo/refs/heads/master/winfo.ps1 | iex`.
+Open PowerShell with desired privilege level and run 
+`irm https://spoo.me/winfo | iex`
+or 
+`irm https://raw.githubusercontent.com/hongkongphoooey/winfo/refs/heads/master/winfo.ps1 | iex`
 
 ## License
 MIT
