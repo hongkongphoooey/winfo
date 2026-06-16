@@ -2,6 +2,8 @@
 
 This PowerShell script provides a rapid snapshot of a Windows machine's health and configuration. It generates a two-part report: a System Summary for general info, and Admin Diagnostics (if run with Administrator privileges) for deep-dive troubleshooting.
 
+![winfo in use on Windows 11](https://raw.githubusercontent.com/hongkongphoooey/winfo/refs/heads/master/screenshot.png)
+
 ## Key Features
 * Identity & Health: OS version, uptime, pending reboots, and live CPU/Memory usage.
 * Network Status: IPv4/IPv6, Gateway, Public IP, DNS, and connectivity tests.
