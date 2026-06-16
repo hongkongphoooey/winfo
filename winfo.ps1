@@ -5,7 +5,7 @@
     A verbose, detailed script to audit system health, identity, network, and security.
     Compatible with PowerShell 5.1. Generates a concise report based on the provided layout.
 .NOTES
-    File Name      : SystemHealthCheck.ps1
+    File Name      : winfo.ps1
     Prerequisite   : PowerShell 5.1
     Execution      : Standard User (Summary) / Administrator (Full Diagnostics)
 #>
