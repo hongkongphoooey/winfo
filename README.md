@@ -22,8 +22,11 @@ You may need to run `Set-ExecutionPolicy Bypass` first.
 
 ### From the web
 Open PowerShell with desired privilege level and run 
+
 `irm https://spoo.me/winfo | iex`
+
 or 
+
 `irm https://raw.githubusercontent.com/hongkongphoooey/winfo/refs/heads/master/winfo.ps1 | iex`
 
 ## License
